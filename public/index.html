@@ -1,302 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Chat App</title>
-  <link rel="stylesheet" href="style.css" />
-  <style>
-    .selected { font-weight: bold; color: #1976d2; }
-    .group-list, .contact-list { margin-bottom: 1em; }
-    .msg { margin: 0.3em 0; padding: 0.6em 1em; background: #f4f7fb; border-radius: 8px; max-width: 80%; }
-    .msg.self { background: #cce4ff; text-align: right; }
-    .attach img { max-width: 150px; border-radius: 8px; }
-    .reaction-btn { border:none;background:none;cursor:pointer;font-size:1.2em }
-    .online-dot { display:inline-block; width:8px; height:8px; background:#4caf50; border-radius:50%; margin-right:3px;}
-    .offline-dot { display:inline-block; width:8px; height:8px; background:#aaa; border-radius:50%; margin-right:3px;}
-    .unread { background: #fff3cd !important; }
-    .read-receipt { font-size:0.8em; color:#888; }
-  </style>
+  <meta charset="UTF-8">
+  <title>Secure Chat App</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div style="max-width:700px;margin:2em auto 0">
-
-    <h1>Chat</h1>
-    <div>
-      <button onclick="showCreateGroup()">Create Group</button>
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal show">
+    <div class="modal-content">
+      <h2>Login / Register</h2>
+      <form id="authForm">
+        <input type="text" id="authUsername" placeholder="Username" required>
+        <input type="password" id="authPassword" placeholder="Password" required>
+        <button id="loginBtn" type="submit">Login</button>
+        <button id="registerBtn" type="button">Register</button>
+        <div id="authError"></div>
+      </form>
     </div>
-    <div style="display:flex; gap:2em;">
-      <div style="min-width:180px;">
-        <div>
-          <b>Contacts</b>
-          <div class="contact-list" id="contacts"></div>
-        </div>
-        <div>
-          <b>Groups</b>
-          <div class="group-list" id="groups"></div>
-        </div>
-      </div>
-      <div style="flex:1">
-        <div id="messages"></div>
-        <form id="msgForm" enctype="multipart/form-data" style="margin-top:1em">
-          <input id="msgInput" name="message" placeholder="Type a message" autocomplete="off" />
-          <input type="file" id="fileInput" name="file" />
-          <button type="submit">Send</button>
-        </form>
-      </div>
-    </div>
+  </div>
 
-    <!-- Modal for creating group -->
-    <div id="groupModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#0006;align-items:center;justify-content:center;">
-      <div style="background:#fff;padding:2em;border-radius:10px;min-width:300px;">
-        <h3>Create Group</h3>
-        <form id="createGroupForm">
-          <div>
-            <input type="text" id="groupName" placeholder="Group Name" required />
-          </div>
-          <div>
-            <label><b>Select members:</b></label>
-            <div id="groupMembers"></div>
-          </div>
-          <button type="submit">Create</button>
-          <button type="button" onclick="hideCreateGroup()">Cancel</button>
-        </form>
+  <!-- Account Settings Modal -->
+  <div id="accountSettingsModal" class="modal">
+    <div class="modal-content">
+      <span id="closeAccountSettings" class="close">&times;</span>
+      <h2>Account Settings</h2>
+      <div><b>Username:</b> <span id="accountUsername"></span></div>
+      <!-- Add extra account settings here if needed -->
+    </div>
+  </div>
+
+  <div class="top-bar" id="topBar" style="display:none;">
+    <span id="userInfo" class="user-info"></span>
+    <button id="addContactBtn">+ Add Contact</button>
+    <button id="createGroupBtn">Create Group</button>
+    <button id="settingsBtn">Settings</button>
+    <button id="logoutBtn">Logout</button>
+  </div>
+  
+  <div class="container" id="mainContainer" style="display:none;">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h3>Contacts</h3>
+        <button id="refreshContactsBtn">↻</button>
+      </div>
+      <ul id="contacts-list"></ul>
+      
+      <div class="sidebar-header">
+        <h3>Groups</h3>
+      </div>
+      <ul id="groups-list"></ul>
+      
+      <div class="sidebar-header">
+        <h3>Friend Requests</h3>
+      </div>
+      <ul id="requests-list"></ul>
+    </div>
+    
+    <div class="conversation">
+      <div id="chat-header">
+        <h2 id="current-chat-name">Select a chat</h2>
+      </div>
+      <div id="chat-window" class="chat-window">
+        <p id="no-messages">Select a contact or group to start chatting</p>
+      </div>
+      <div class="message-input">
+        <button id="emojiBtn" type="button">😊</button>
+        <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+        <button id="sendBtn" type="button" disabled>→</button>
+      </div>
+      <div id="typing-indicator"></div>
+    </div>
+  </div>
+
+  <!-- Add Contact Modal -->
+  <div id="addContactModal" class="modal">
+    <div class="modal-content">
+      <h2>Add New Contact</h2>
+      <input type="text" id="newContactUsername" placeholder="Username">
+      <button id="sendRequestBtn" type="button">Send Request</button>
+      <div id="contactError"></div>
+    </div>
+  </div>
+
+  <!-- Create Group Modal -->
+  <div id="createGroupModal" class="modal">
+    <div class="modal-content">
+      <h2>Create New Group</h2>
+      <input type="text" id="newGroupName" placeholder="Group name">
+      <div id="groupMembersList">
+        <h4>Select Members:</h4>
+      </div>
+      <button id="confirmCreateGroupBtn" type="button">Create Group</button>
+      <div id="groupError"></div>
+    </div>
+  </div>
+
+  <!-- Emoji Picker -->
+  <div id="emojiMenu" class="emoji-menu"></div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <span id="closeSettings" class="close">&times;</span>
+      <h2>Settings</h2>
+      <div class="setting-section">
+        <label>
+          <input type="checkbox" id="darkModeToggle">
+          Dark Mode
+        </label>
+      </div>
+      <div class="setting-section">
+        <label>
+          Accent Color:
+          <input type="color" id="accentColorPicker" value="#a8e6cf">
+        </label>
+      </div>
+      <div class="setting-section">
+        <button id="resetSettingsBtn" type="button">Reset Settings</button>
       </div>
     </div>
   </div>
-  <script>
-    let username = null;
-    let chatWith = null;
-    let chatType = null;
-    let contacts = [];
-    let groups = [];
-    let usersOnline = {};
-    let readIdx = {};
 
-    // Fetch user and contacts/groups
-    fetch('/api/whoami').then(r => r.json()).then(data => {
-      username = data.username;
-      loadContactsAndGroups();
-      pollOnline();
-    });
-
-    function loadContactsAndGroups() {
-      fetch('/api/contacts').then(r => r.json()).then(data => {
-        contacts = data.contacts || [];
-        renderContacts();
-        fetch('/api/groups').then(r => r.json()).then(groupsData => {
-          groups = groupsData;
-          renderGroups();
-        });
-      });
-    }
-
-    function renderContacts() {
-      const list = document.getElementById('contacts');
-      list.innerHTML = '';
-      contacts.forEach(c => {
-        const d = document.createElement('div');
-        d.innerHTML = `${usersOnline[c] ? '<span class="online-dot"></span>' : '<span class="offline-dot"></span>'}${c}`;
-        d.className = (chatType === 'contact' && chatWith === c) ? 'selected' : '';
-        d.style.cursor = 'pointer';
-        d.onclick = () => { chatWith = c; chatType = 'contact'; pollMessages(); renderContacts(); renderGroups(); };
-        list.appendChild(d);
-      });
-    }
-
-    function renderGroups() {
-      const list = document.getElementById('groups');
-      list.innerHTML = '';
-      groups.forEach(g => {
-        const d = document.createElement('div');
-        d.textContent = g.name;
-        d.className = (chatType === 'group' && chatWith === g.id) ? 'selected' : '';
-        d.style.cursor = 'pointer';
-        d.onclick = () => { chatWith = g.id; chatType = 'group'; pollMessages(); renderContacts(); renderGroups(); };
-        list.appendChild(d);
-      });
-    }
-
-    function showCreateGroup() {
-      document.getElementById('groupModal').style.display = 'flex';
-      const membersDiv = document.getElementById('groupMembers');
-      membersDiv.innerHTML = '';
-      contacts.forEach(c => {
-        if (c === username) return;
-        const lbl = document.createElement('label');
-        lbl.style.display = 'block';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = c;
-        lbl.appendChild(cb);
-        lbl.append(' ' + c);
-        membersDiv.appendChild(lbl);
-      });
-    }
-    function hideCreateGroup() {
-      document.getElementById('groupModal').style.display = 'none';
-    }
-    document.getElementById('createGroupForm').onsubmit = async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('groupName').value;
-      const checks = document.querySelectorAll('#groupMembers input[type=checkbox]');
-      const members = Array.from(checks).filter(cb => cb.checked).map(cb => cb.value);
-      if (!name || members.length === 0) return alert('Name and at least one member.');
-      await fetch('/api/groups', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ name, members })
-      });
-      hideCreateGroup();
-      loadContactsAndGroups();
-    };
-
-    function pollMessages() {
-      if(!chatWith || !chatType) return;
-      let url, key;
-      if(chatType === 'contact') {
-        url = `/api/conversations/${encodeURIComponent(chatWith)}`;
-        key = `contact:${chatWith}`;
-      } else if(chatType === 'group') {
-        url = `/api/groups/${encodeURIComponent(chatWith)}/messages`;
-        key = `group:${chatWith}`;
-      }
-      fetch(url)
-        .then(r => r.json())
-        .then(messages => {
-          getReadIdx(idx => renderMessages(messages, idx));
-        });
-      setTimeout(pollMessages, 2000);
-    }
-
-    function renderMessages(messages, lastReadIdx) {
-      const box = document.getElementById('messages');
-      box.innerHTML = '';
-      messages.forEach((m, i) => {
-        let html = `<div class="msg${m.sender === username ? ' self' : ''}${lastReadIdx !== undefined && i > lastReadIdx ? ' unread' : ''}">`;
-        if (m.sender) html += `<b>${m.sender}</b>: `;
-        if (m.message) html += m.message.replace(/</g, '&lt;');
-        if (m.file) {
-          const ext = m.file.split('.').pop().toLowerCase();
-          if (['png','jpg','jpeg','gif','bmp','webp'].includes(ext))
-            html += `<br><a class="attach" href="${m.file}" target="_blank"><img src="${m.file}" /></a>`;
-          else
-            html += `<br><a class="attach" href="${m.file}" target="_blank">Download file</a>`;
-        }
-        // Reactions
-        if (m.reactions && m.reactions.length > 0) {
-          html += `<div>`;
-          m.reactions.forEach(r => {
-            html += `<span>${r.emoji} ${r.user === username ? '(You)' : ''}</span> `;
-          });
-          html += `</div>`;
-        }
-        // Reaction buttons
-        html += `<div>
-          <button class="reaction-btn" onclick="reactMessage(${i}, '😀')">😀</button>
-          <button class="reaction-btn" onclick="reactMessage(${i}, '👍')">👍</button>
-          <button class="reaction-btn" onclick="reactMessage(${i}, '❤️')">❤️</button>
-        </div>`;
-        // Edit/Delete
-        if (m.sender === username) {
-          html += `<button onclick="editMessage(${i})">Edit</button>`;
-          html += `<button onclick="deleteMessage(${i})">Delete</button>`;
-        }
-        // Read receipts (show last message index read by others in group/contact)
-        if (i === messages.length - 1 && m.sender === username && chatType === 'contact') {
-          html += `<div class="read-receipt">${getReadReceipt(chatWith, i)}</div>`;
-        }
-        html += `</div>`;
-        box.innerHTML += html;
-      });
-      box.scrollTop = box.scrollHeight;
-      // Mark as read the last message
-      markRead(messages.length - 1);
-    }
-
-    window.reactMessage = function(i, emoji) {
-      let chatId = chatWith;
-      let type = chatType;
-      fetch(`/api/messages/${type}/${encodeURIComponent(chatId)}/${i}/react`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ emoji })
-      }).then(() => pollMessages());
-    };
-    window.editMessage = function(i) {
-      const newMsg = prompt("Edit your message:");
-      if (!newMsg) return;
-      let chatId = chatWith, type = chatType;
-      fetch(`/api/messages/${type}/${encodeURIComponent(chatId)}/${i}`, {
-        method: 'PUT',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ message: newMsg })
-      }).then(() => pollMessages());
-    };
-    window.deleteMessage = function(i) {
-      if (!confirm("Delete this message?")) return;
-      let chatId = chatWith, type = chatType;
-      fetch(`/api/messages/${type}/${encodeURIComponent(chatId)}/${i}`, {
-        method: 'DELETE'
-      }).then(() => pollMessages());
-    };
-
-    // UNREAD / READ RECEIPT
-    function markRead(idx) {
-      if(!chatWith || !chatType) return;
-      fetch(`/api/markread/${chatType}/${encodeURIComponent(chatWith)}`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ idx })
-      });
-    }
-    function getReadIdx(cb) {
-      fetch('/api/whoami').then(r => r.json()).then(({username}) => {
-        fetch('/api/online').then(r => r.json()).then(() => {
-          fetch(`/api/contacts`).then(r => r.json()).then(data => {
-            fetch(`/api/groups`).then(r => r.json()).then(() => {
-              fetch('/api/whoami').then(r2 => r2.json()).then(userdata => {
-                fetch(`/data/users.json`).then(r3 => r3.json()).then(users => {
-                  let u = users[username];
-                  let idx = u && u.readIdx && u.readIdx[`${chatType}:${chatWith}`];
-                  cb(idx);
-                });
-              });
-            });
-          });
-        });
-      });
-    }
-    function getReadReceipt(contact, idx) {
-      // For demo: in a real app, this should show tick if contact has read up to idx
-      return '✔ Delivered/Read';
-    }
-
-    // ONLINE STATUS
-    function pollOnline() {
-      fetch('/api/online').then(r => r.json()).then(online => {
-        usersOnline = online;
-        renderContacts();
-      });
-      setTimeout(pollOnline, 10000);
-    }
-
-    document.getElementById('msgForm').onsubmit = async (e) => {
-      e.preventDefault();
-      if(!chatWith || !chatType) return alert('Select a contact or group');
-      const input = document.getElementById('msgInput');
-      const fileInput = document.getElementById('fileInput');
-      const formData = new FormData();
-      if (input.value) formData.append('message', input.value);
-      if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
-      if (!input.value && !fileInput.files[0]) return;
-      let url;
-      if(chatType === 'contact') url = `/api/conversations/${encodeURIComponent(chatWith)}`;
-      else url = `/api/groups/${encodeURIComponent(chatWith)}/messages`;
-      await fetch(url, { method: 'POST', body: formData });
-      input.value = '';
-      fileInput.value = '';
-      pollMessages();
-    };
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
