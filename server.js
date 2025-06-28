@@ -34,6 +34,17 @@ const GROUPS_FILE = path.join(dataDir, 'groups.json');
 const MESSAGES_FILE = path.join(dataDir, 'messages.json');
 const TYPING_FILE = path.join(dataDir, 'typing.json');
 
+// E2EE public keys data file
+const PUBLIC_KEYS_FILE = path.join(dataDir, 'publicKeys.json');
+if (!fs.existsSync(PUBLIC_KEYS_FILE)) fs.writeFileSync(PUBLIC_KEYS_FILE, '{}', 'utf8');
+
+function readPublicKeys() {
+  return JSON.parse(fs.readFileSync(PUBLIC_KEYS_FILE, 'utf8') || '{}');
+}
+function writePublicKeys(data) {
+  fs.writeFileSync(PUBLIC_KEYS_FILE, JSON.stringify(data, null, 2));
+}
+
 // Initialize data files if they don't exist
 [USERS_FILE, CONTACTS_FILE, GROUPS_FILE, MESSAGES_FILE, TYPING_FILE].forEach(file => {
   if (!fs.existsSync(file)) fs.writeFileSync(file, '{}', 'utf8');
@@ -75,6 +86,22 @@ function writeData(file, data) {
     throw err;
   }
 }
+
+// --- E2EE public key endpoints ---
+app.post('/api/publickey', (req, res) => {
+  const {username, publicKey} = req.body;
+  if (!username || !publicKey) return res.status(400).json({error: 'Missing username or publicKey'});
+  const pks = readPublicKeys();
+  pks[username] = publicKey;
+  writePublicKeys(pks);
+  res.json({ok: true});
+});
+app.get('/api/publickey/:username', (req, res) => {
+  const username = req.params.username;
+  const pks = readPublicKeys();
+  if (!pks[username]) return res.status(404).json({error: 'User public key not found'});
+  res.json({publicKey: pks[username]});
+});
 
 // Authentication middleware
 function requireAuth(req, res, next) {

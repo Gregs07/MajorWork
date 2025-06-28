@@ -47,6 +47,7 @@ const fileInput = document.getElementById('fileInput');
 let myUsername = null;
 let currentChat = null;
 let currentChatType = null; // 'contact' or 'group'
+let myKeyPair = null; // <-- E2EE keypair
 const EMOJI_LIST = ["😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😍","😘","😗","😚","😙","🥰","😋","😜","🤪","😎","😭","😢","😤","😠","😡","🤬","🤗","😇","😏","😶","😬","🥲","🥹","🥺","😳","🥵","🥶","🥴","😵","🤯","😱","😨","😰","😥","😓","🤔","🤨","😐","😑","🙄","😤","😮‍💨","😮","😲","🥱","😴","🤤","😪","😵‍💫","😷","🤒","🤕","🤢","🤮","🤧","🥳","🥸","😺","😸","😹","😻","😼","😽","🙀","😿","😾","👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","🫶","🫰","👈","👉","👆","🖕","👇","☝️","👍","👎"];
 
 // Initialize the app
@@ -131,6 +132,7 @@ async function checkAuthStatus() {
     myUsername = data.username;
     
     if (myUsername) {
+      await setupE2EEKeys(myUsername);
       hideModal(authModal);
       showAppUI(true);
       updateUserInfo();
@@ -146,6 +148,20 @@ async function checkAuthStatus() {
     showAppUI(false);
     updateUserInfo();
   }
+}
+
+async function setupE2EEKeys(username) {
+  let keys = await window.E2EE.loadKeyPair();
+  if (!keys) {
+    keys = await window.E2EE.generateKeyPair();
+    const pub = await window.E2EE.exportPublicKey(keys.publicKey);
+    await fetch('/api/publickey', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, publicKey: pub})
+    });
+  }
+  myKeyPair = keys;
 }
 
 async function handleLogin(e) {
@@ -445,17 +461,82 @@ function openChat(id, type) {
   loadMessages();
 }
 
+// --- E2EE send message ---
+async function sendMessage() {
+  const message = messageInput.value.trim();
+  const file = fileInput && fileInput.files && fileInput.files[0];
+  if (!message && !file) return;
+
+  try {
+    let endpoint, options;
+    if (currentChatType === 'contact') {
+      endpoint = `/api/conversations/${encodeURIComponent(currentChat)}`;
+      let encryptedMsg = message;
+      if (message) {
+        // Encrypt with recipient's public key
+        const resp = await fetch(`/api/publickey/${encodeURIComponent(currentChat)}`);
+        if (!resp.ok) throw new Error('Failed to fetch recipient public key');
+        const {publicKey: recipientPubB64} = await resp.json();
+        const recipientPub = await window.E2EE.importPublicKey(recipientPubB64);
+        encryptedMsg = await window.E2EE.encryptMessage(recipientPub, message);
+      }
+      if (file) {
+        const formData = new FormData();
+        formData.append('message', encryptedMsg);
+        formData.append('file', file);
+        options = { method: 'POST', body: formData };
+      } else {
+        options = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: encryptedMsg })
+        };
+      }
+    } else {
+      // (Groups remain unencrypted here, can be upgraded to E2EE later)
+      endpoint = `/api/groups/${encodeURIComponent(currentChat)}/messages`;
+      if (file) {
+        const formData = new FormData();
+        formData.append('message', message);
+        formData.append('file', file);
+        options = { method: 'POST', body: formData };
+      } else {
+        options = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        };
+      }
+    }
+
+    const response = await fetch(endpoint, options);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to send message');
+    }
+    messageInput.value = '';
+    if (fileInput) fileInput.value = '';
+    loadMessages();
+  } catch (error) {
+    console.error('Message send failed:', error);
+    alert('Failed to send message');
+  }
+}
+
+// --- E2EE load messages ---
 async function loadMessages() {
   if (!currentChat) return;
 
   try {
-    const endpoint = currentChatType === 'contact' 
-      ? `/api/conversations/${encodeURIComponent(currentChat)}`
-      : `/api/groups/${encodeURIComponent(currentChat)}/messages`;
+    let endpoint;
+    if (currentChatType === 'contact') {
+      endpoint = `/api/conversations/${encodeURIComponent(currentChat)}`;
+    } else {
+      endpoint = `/api/groups/${encodeURIComponent(currentChat)}/messages`;
+    }
 
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error('Failed to load messages');
-
     const messages = await response.json();
 
     chatWindow.innerHTML = '';
@@ -463,6 +544,20 @@ async function loadMessages() {
     if (messages.length === 0) {
       chatWindow.innerHTML = '<p id="no-messages">No messages yet</p>';
       return;
+    }
+
+    // Decrypt contact messages if E2EE
+    if (currentChatType === 'contact' && myKeyPair && myKeyPair.privateKey) {
+      for (const msg of messages) {
+        if (msg.message && msg.sender !== myUsername) {
+          // Decrypt received messages
+          try {
+            msg.message = await window.E2EE.decryptMessage(myKeyPair.privateKey, msg.message);
+          } catch (e) {
+            msg.message = '[Unable to decrypt]';
+          }
+        }
+      }
     }
 
     messages.forEach((msg, idx) => {
@@ -477,7 +572,6 @@ async function loadMessages() {
       messageContent.classList.add('message');
       messageContent.classList.add(msg.sender === myUsername ? 'mine' : 'other');
 
-      // Edit/Delete buttons for own messages
       if (msg.sender === myUsername) {
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️';
@@ -569,51 +663,6 @@ async function deleteMessage(idx) {
     loadMessages();
   } catch (e) {
     alert('Failed to delete message');
-  }
-}
-
-// --- Update sendMessage to support file uploads ---
-async function sendMessage() {
-  const message = messageInput.value.trim();
-  const file = fileInput && fileInput.files && fileInput.files[0];
-
-  if (!message && !file) return;
-
-  try {
-    const endpoint = currentChatType === 'contact'
-      ? `/api/conversations/${encodeURIComponent(currentChat)}`
-      : `/api/groups/${encodeURIComponent(currentChat)}/messages`;
-
-    let options;
-    if (file) {
-      const formData = new FormData();
-      formData.append('message', message);
-      formData.append('file', file);
-      options = {
-        method: 'POST',
-        body: formData
-      };
-    } else {
-      options = {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      };
-    }
-
-    const response = await fetch(endpoint, options);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to send message');
-    }
-
-    messageInput.value = '';
-    if (fileInput) fileInput.value = '';
-    loadMessages();
-  } catch (error) {
-    console.error('Message send failed:', error);
-    alert('Failed to send message');
   }
 }
 
