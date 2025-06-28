@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Secure Chat App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal show">
+    <div class="modal-content">
+      <h2>Login / Register</h2>
+      <form id="authForm">
+        <input type="text" id="authUsername" placeholder="Username" required>
+        <input type="password" id="authPassword" placeholder="Password" required>
+        <button id="loginBtn" type="submit">Login</button>
+        <button id="registerBtn" type="button">Register</button>
+        <div id="authError"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Account Settings Modal -->
+  <div id="accountSettingsModal" class="modal">
+    <div class="modal-content">
+      <span id="closeAccountSettings" class="close">&times;</span>
+      <h2>Account Settings</h2>
+      <div><b>Username:</b> <span id="accountUsername"></span></div>
+      <!-- Add extra account settings here if needed -->
+    </div>
+  </div>
+
+  <div class="top-bar" id="topBar" style="display:none;">
+    <span id="userInfo" class="user-info"></span>
+    <button id="addContactBtn">+ Add Contact</button>
+    <button id="createGroupBtn">Create Group</button>
+    <button id="settingsBtn">Settings</button>
+    <button id="logoutBtn">Logout</button>
+  </div>
+  
+  <div class="container" id="mainContainer" style="display:none;">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h3>Contacts</h3>
+        <button id="refreshContactsBtn">↻</button>
+      </div>
+      <ul id="contacts-list"></ul>
+      
+      <div class="sidebar-header">
+        <h3>Groups</h3>
+      </div>
+      <ul id="groups-list"></ul>
+      
+      <div class="sidebar-header">
+        <h3>Friend Requests</h3>
+      </div>
+      <ul id="requests-list"></ul>
+    </div>
+    
+    <div class="conversation">
+      <div id="chat-header">
+        <h2 id="current-chat-name">Select a chat</h2>
+      </div>
+      <div id="chat-window" class="chat-window">
+        <p id="no-messages">Select a contact or group to start chatting</p>
+      </div>
+      <div class="message-input">
+        <button id="emojiBtn" type="button">😊</button>
+        <input type="text" id="messageInput" placeholder="Type your message..." disabled>
+        <button id="sendBtn" type="button" disabled>→</button>
+      </div>
+      <div id="typing-indicator"></div>
+    </div>
+  </div>
+
+  <!-- Add Contact Modal -->
+  <div id="addContactModal" class="modal">
+    <div class="modal-content">
+      <h2>Add New Contact</h2>
+      <input type="text" id="newContactUsername" placeholder="Username">
+      <button id="sendRequestBtn" type="button">Send Request</button>
+      <div id="contactError"></div>
+    </div>
+  </div>
+
+  <!-- Create Group Modal -->
+  <div id="createGroupModal" class="modal">
+    <div class="modal-content">
+      <h2>Create New Group</h2>
+      <input type="text" id="newGroupName" placeholder="Group name">
+      <div id="groupMembersList">
+        <h4>Select Members:</h4>
+      </div>
+      <button id="confirmCreateGroupBtn" type="button">Create Group</button>
+      <div id="groupError"></div>
+    </div>
+  </div>
+
+  <!-- Emoji Picker -->
+  <div id="emojiMenu" class="emoji-menu"></div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <span id="closeSettings" class="close">&times;</span>
+      <h2>Settings</h2>
+      <div class="setting-section">
+        <label>
+          <input type="checkbox" id="darkModeToggle">
+          Dark Mode
+        </label>
+      </div>
+      <div class="setting-section">
+        <label>
+          Accent Color:
+          <input type="color" id="accentColorPicker" value="#a8e6cf">
+        </label>
+      </div>
+      <div class="setting-section">
+        <button id="resetSettingsBtn" type="button">Reset Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
