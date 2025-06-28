@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const multer = require('multer');
 const app = express();
 const PORT = 3000;
 
@@ -12,6 +13,19 @@ const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir);
 }
+
+// File upload setup
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, unique + '-' + file.originalname.replace(/[^a-z0-9_.-]/gi, '_'));
+  }
+});
+const upload = multer({ storage });
+app.use('/uploads', express.static(uploadDir));
 
 // Data files with directory path
 const USERS_FILE = path.join(dataDir, 'users.json');
@@ -270,18 +284,19 @@ app.get('/api/contacts', requireAuth, (req, res) => {
   }
 });
 
-// Send Message (Contact)
-app.post('/api/conversations/:contact', requireAuth, (req, res) => {
+// Send Message (Contact) WITH FILE SUPPORT
+app.post('/api/conversations/:contact', requireAuth, upload.single('file'), (req, res) => {
   const from = req.session.username;
   const to = req.params.contact;
   const { message } = req.body;
-  if (!message || !to) return res.status(400).json({ error: "Message and contact required" });
+  let fileUrl = null;
+  if (req.file) fileUrl = '/uploads/' + req.file.filename;
+  if (!message && !fileUrl) return res.status(400).json({ error: "Message or file required" });
 
   const messagesData = readData(MESSAGES_FILE);
   const key = [from, to].sort().join('__');
-
   messagesData[key] = messagesData[key] || [];
-  messagesData[key].push({ sender: from, message });
+  messagesData[key].push({ sender: from, message, file: fileUrl });
   writeData(MESSAGES_FILE, messagesData);
 
   res.json({ success: true });
@@ -324,12 +339,14 @@ app.get('/api/groups/:groupId/messages', requireAuth, (req, res) => {
   res.json(messagesData[key] || []);
 });
 
-// Send Group Message
-app.post('/api/groups/:groupId/messages', requireAuth, (req, res) => {
+// Send Group Message WITH FILE SUPPORT
+app.post('/api/groups/:groupId/messages', requireAuth, upload.single('file'), (req, res) => {
   const username = req.session.username;
   const groupId = req.params.groupId;
   const { message } = req.body;
-  if (!message) return res.status(400).json({ error: "Message required" });
+  let fileUrl = null;
+  if (req.file) fileUrl = '/uploads/' + req.file.filename;
+  if (!message && !fileUrl) return res.status(400).json({ error: "Message or file required" });
   const groupsData = readData(GROUPS_FILE);
   if (!groupsData[groupId] || !groupsData[groupId].members.includes(username)) {
     return res.status(403).json({ success: false, error: "Not a group member" });
@@ -337,7 +354,43 @@ app.post('/api/groups/:groupId/messages', requireAuth, (req, res) => {
   const messagesData = readData(MESSAGES_FILE);
   const key = `group__${groupId}`;
   messagesData[key] = messagesData[key] || [];
-  messagesData[key].push({ sender: username, message });
+  messagesData[key].push({ sender: username, message, file: fileUrl });
+  writeData(MESSAGES_FILE, messagesData);
+  res.json({ success: true });
+});
+
+// --- EDIT/DELETE MESSAGE ---
+app.put('/api/messages/:chatType/:chatId/:msgIdx', requireAuth, (req, res) => {
+  const { chatType, chatId, msgIdx } = req.params;
+  const { message } = req.body;
+  const username = req.session.username;
+  const messagesData = readData(MESSAGES_FILE);
+  let key;
+  if (chatType === 'contact') {
+    key = [username, chatId].sort().join('__');
+  } else {
+    key = `group__${chatId}`;
+  }
+  const msg = messagesData[key] && messagesData[key][msgIdx];
+  if (!msg || msg.sender !== username) return res.status(403).json({ error: "Can't edit" });
+  msg.message = message;
+  writeData(MESSAGES_FILE, messagesData);
+  res.json({ success: true });
+});
+
+app.delete('/api/messages/:chatType/:chatId/:msgIdx', requireAuth, (req, res) => {
+  const { chatType, chatId, msgIdx } = req.params;
+  const username = req.session.username;
+  const messagesData = readData(MESSAGES_FILE);
+  let key;
+  if (chatType === 'contact') {
+    key = [username, chatId].sort().join('__');
+  } else {
+    key = `group__${chatId}`;
+  }
+  const msg = messagesData[key] && messagesData[key][msgIdx];
+  if (!msg || msg.sender !== username) return res.status(403).json({ error: "Can't delete" });
+  messagesData[key].splice(msgIdx, 1);
   writeData(MESSAGES_FILE, messagesData);
   res.json({ success: true });
 });

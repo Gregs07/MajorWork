@@ -41,6 +41,7 @@ const userInfo = document.getElementById('userInfo');
 const accountSettingsModal = document.getElementById('accountSettingsModal');
 const closeAccountSettings = document.getElementById('closeAccountSettings');
 const accountUsername = document.getElementById('accountUsername');
+const fileInput = document.getElementById('fileInput');
 
 // App State
 let myUsername = null;
@@ -217,6 +218,7 @@ async function handleLogout() {
     currentChatName.textContent = 'Select a chat';
     messageInput.disabled = true;
     sendBtn.disabled = true;
+    if (fileInput) fileInput.value = '';
     showModal(authModal);
     showAppUI(false);
     updateUserInfo();
@@ -427,68 +429,107 @@ async function createGroup() {
 function openChat(id, type) {
   currentChat = id;
   currentChatType = type;
-  
+
   // Update UI
   currentChatName.textContent = id;
   messageInput.disabled = false;
   sendBtn.disabled = false;
-  
+  if (fileInput) fileInput.disabled = false;
+
   // Highlight active chat
   const selector = type === 'contact' ? `[data-contact="${id}"]` : `[data-group="${id}"]`;
   document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active-contact'));
   document.querySelector(selector)?.classList.add('active-contact');
-  
+
   // Load messages
   loadMessages();
 }
 
 async function loadMessages() {
   if (!currentChat) return;
-  
+
   try {
     const endpoint = currentChatType === 'contact' 
       ? `/api/conversations/${encodeURIComponent(currentChat)}`
       : `/api/groups/${encodeURIComponent(currentChat)}/messages`;
-    
+
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error('Failed to load messages');
-    
+
     const messages = await response.json();
-    
+
     chatWindow.innerHTML = '';
-    
+
     if (messages.length === 0) {
       chatWindow.innerHTML = '<p id="no-messages">No messages yet</p>';
       return;
     }
-    
-    messages.forEach(msg => {
+
+    messages.forEach((msg, idx) => {
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message-container');
       if (msg.sender === myUsername) {
         messageDiv.style.marginLeft = 'auto';
         messageDiv.style.marginRight = '0';
       }
-      
+
       const messageContent = document.createElement('div');
       messageContent.classList.add('message');
       messageContent.classList.add(msg.sender === myUsername ? 'mine' : 'other');
-      
+
+      // Edit/Delete buttons for own messages
+      if (msg.sender === myUsername) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.className = 'edit-btn';
+        editBtn.title = 'Edit message';
+        editBtn.onclick = () => editMessagePrompt(idx, msg.message);
+        messageContent.appendChild(editBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.title = 'Delete message';
+        deleteBtn.onclick = () => deleteMessage(idx);
+        messageContent.appendChild(deleteBtn);
+      }
+
       const senderSpan = document.createElement('span');
       senderSpan.className = 'message-sender';
       senderSpan.textContent = msg.sender;
-      
+
       const textSpan = document.createElement('span');
       textSpan.textContent = msg.message;
-      
+
       messageContent.appendChild(senderSpan);
       messageContent.appendChild(document.createElement('br'));
       messageContent.appendChild(textSpan);
-      
+
+      // Show file if present
+      if (msg.file) {
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'attach';
+        let isImage = /\.(jpe?g|png|gif|bmp|webp)$/i.test(msg.file);
+        if (isImage) {
+          const img = document.createElement('img');
+          img.src = msg.file;
+          img.alt = 'attachment';
+          fileDiv.appendChild(img);
+        } else {
+          const link = document.createElement('a');
+          link.href = msg.file;
+          link.textContent = '📎 Download attachment';
+          link.target = '_blank';
+          fileDiv.appendChild(link);
+        }
+        messageContent.appendChild(document.createElement('br'));
+        messageContent.appendChild(fileDiv);
+      }
+
       messageDiv.appendChild(messageContent);
       chatWindow.appendChild(messageDiv);
     });
-    
+
     chatWindow.scrollTop = chatWindow.scrollHeight;
   } catch (error) {
     console.error('Failed to load messages:', error);
@@ -496,30 +537,83 @@ async function loadMessages() {
   }
 }
 
+// --- Edit message prompt ---
+function editMessagePrompt(idx, oldMsg) {
+  const newMsg = prompt('Edit your message:', oldMsg);
+  if (newMsg === null || newMsg.trim() === oldMsg) return;
+  updateMessage(idx, newMsg.trim());
+}
+
+async function updateMessage(idx, newMsg) {
+  try {
+    const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(currentChat)}/${idx}`;
+    const response = await fetch(endpoint, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: newMsg })
+    });
+    if (!response.ok) throw new Error('Edit failed');
+    loadMessages();
+  } catch (e) {
+    alert('Failed to edit message');
+  }
+}
+
+// --- Delete message ---
+async function deleteMessage(idx) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(currentChat)}/${idx}`;
+    const response = await fetch(endpoint, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Delete failed');
+    loadMessages();
+  } catch (e) {
+    alert('Failed to delete message');
+  }
+}
+
+// --- Update sendMessage to support file uploads ---
 async function sendMessage() {
   const message = messageInput.value.trim();
-  if (!message || !currentChat) return;
-  
+  const file = fileInput && fileInput.files && fileInput.files[0];
+
+  if (!message && !file) return;
+
   try {
     const endpoint = currentChatType === 'contact'
       ? `/api/conversations/${encodeURIComponent(currentChat)}`
       : `/api/groups/${encodeURIComponent(currentChat)}/messages`;
-    
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
-    });
-    
+
+    let options;
+    if (file) {
+      const formData = new FormData();
+      formData.append('message', message);
+      formData.append('file', file);
+      options = {
+        method: 'POST',
+        body: formData
+      };
+    } else {
+      options = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      };
+    }
+
+    const response = await fetch(endpoint, options);
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to send message');
     }
-    
+
     messageInput.value = '';
+    if (fileInput) fileInput.value = '';
     loadMessages();
   } catch (error) {
     console.error('Message send failed:', error);
+    alert('Failed to send message');
   }
 }
 
