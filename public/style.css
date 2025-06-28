@@ -252,7 +252,6 @@ button:active {
   border-color: var(--accent);
 }
 
-/* --- File input style for file upload --- */
 .message-input input[type="file"] {
   background: none;
   border: none;
@@ -409,14 +408,17 @@ button:active {
   background: none;
   border: none;
   color: var(--accent-dark);
-  font-size: 1.1em;
+  font-size: 0.95em;
   cursor: pointer;
-  margin-left: 8px;
+  margin-left: 4px;
   margin-right: 0;
   opacity: 0.6;
   transition: color 0.2s, opacity 0.2s;
   position: relative;
   top: 2px;
+  padding: 0 2px;
+  line-height: 1;
+  vertical-align: middle;
 }
 .edit-btn:hover, .delete-btn:hover {
   color: var(--error);

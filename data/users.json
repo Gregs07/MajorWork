@@ -31,5 +31,11 @@
   },
   "dingley": {
     "password": "$2b$10$rvEg5wCpOl0xg6U3OugIqOEA5YJroiWB76u0./usGMXbaO.FFaeEm"
+  },
+  "newacc2": {
+    "password": "$2b$10$e5b7tzqQu.WUytoW159n0uyc/3h1eayzNno9WR8V0Qwhulk292syG"
+  },
+  "skib123": {
+    "password": "$2b$10$auqLwuvAV1Tnh2O1bXZ2nOsHRdzN.IDq6uqFFiYj3bypQ84H76HIO"
   }
 }
