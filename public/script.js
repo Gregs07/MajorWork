@@ -485,9 +485,13 @@ async function loadMessages() {
       for (const msg of messages) {
         if (msg.message) {
           try {
-            const encryptedPayload = JSON.parse(msg.message);
-            const isSender = msg.sender === myUsername;
-            msg.message = await window.E2EE.decryptForMyself(myKeyPair.privateKey, encryptedPayload, isSender);
+            // Only decrypt if message looks like JSON (encrypted payload)
+            if (msg.message.trim().startsWith('{')) {
+              const encryptedPayload = JSON.parse(msg.message);
+              const isSender = msg.sender === myUsername;
+              msg.message = await window.E2EE.decryptForMyself(myKeyPair.privateKey, encryptedPayload, isSender);
+            }
+            // Otherwise, treat as plaintext
           } catch (e) {
             msg.message = '[Unable to decrypt]';
           }
@@ -564,14 +568,23 @@ function editMessagePrompt(idx, oldMsg) {
 async function updateMessage(idx, newMsg) {
   try {
     let chatId = currentChat;
+    let payload = newMsg;
     if (currentChatType === 'contact') {
       chatId = [myUsername, currentChat].sort().join('__');
+      // E2EE encrypt the message on edit for contacts
+      const resp = await fetch(`/api/publickey/${encodeURIComponent(currentChat)}`, { credentials: 'include' });
+      if (!resp.ok) throw new Error('Failed to fetch recipient public key');
+      const { publicKey: recipientPubB64 } = await resp.json();
+      const recipientPub = await window.E2EE.importPublicKey(recipientPubB64);
+      const myPubB64 = localStorage.getItem('e2ee_publicKey');
+      const myPub = await window.E2EE.importPublicKey(myPubB64);
+      payload = JSON.stringify(await window.E2EE.encryptForBoth(myPub, recipientPub, newMsg));
     }
     const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(chatId)}/${idx}`;
     const response = await fetch(endpoint, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: newMsg }),
+      body: JSON.stringify({ message: payload }),
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Edit failed');
