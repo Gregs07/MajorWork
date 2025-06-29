@@ -71,6 +71,78 @@ async function decryptMessage(privateKey, encryptedB64) {
   return new TextDecoder().decode(decrypted);
 }
 
+// --- Hybrid E2EE: AES for body, RSA for keys ---
+
+async function generateAESKey() {
+  return await window.crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function exportAESKey(key) {
+  const raw = await window.crypto.subtle.exportKey("raw", key);
+  return btoa(String.fromCharCode(...new Uint8Array(raw)));
+}
+async function importAESKey(rawB64) {
+  const raw = Uint8Array.from(atob(rawB64), x => x.charCodeAt(0));
+  return await window.crypto.subtle.importKey(
+    "raw", raw.buffer, "AES-GCM", true, ["encrypt", "decrypt"]
+  );
+}
+
+async function aesEncrypt(aesKey, plaintext) {
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const data = new TextEncoder().encode(plaintext);
+  const enc = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv }, aesKey, data
+  );
+  return {
+    iv: btoa(String.fromCharCode(...iv)),
+    ciphertext: btoa(String.fromCharCode(...new Uint8Array(enc)))
+  };
+}
+
+async function aesDecrypt(aesKey, ivB64, ciphertextB64) {
+  const iv = Uint8Array.from(atob(ivB64), x => x.charCodeAt(0));
+  const ciphertext = Uint8Array.from(atob(ciphertextB64), x => x.charCodeAt(0));
+  const dec = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv }, aesKey, ciphertext
+  );
+  return new TextDecoder().decode(dec);
+}
+
+// Encrypt message so both sender and recipient can read
+async function encryptForBoth(myPublicKey, recipientPublicKey, plaintext) {
+  // 1. Generate AES key
+  const aesKey = await generateAESKey();
+  // 2. Encrypt plaintext with AES
+  const { iv, ciphertext } = await aesEncrypt(aesKey, plaintext);
+  // 3. Export AES key
+  const rawAES = await exportAESKey(aesKey);
+  // 4. Encrypt AES key for both users
+  const encAESforSender = await encryptMessage(myPublicKey, rawAES);
+  const encAESforRecipient = await encryptMessage(recipientPublicKey, rawAES);
+
+  return {
+    ciphertext,
+    iv,
+    keyForSender: encAESforSender,
+    keyForRecipient: encAESforRecipient
+  };
+}
+
+// Decrypt message for either sender or recipient (you have privateKey, know if you are sender)
+async function decryptForMyself(privateKey, encrypted, isSender) {
+  const whichKey = isSender ? encrypted.keyForSender : encrypted.keyForRecipient;
+  // 1. Decrypt AES key
+  const rawAES = await decryptMessage(privateKey, whichKey);
+  const aesKey = await importAESKey(rawAES);
+  // 2. Decrypt message
+  return await aesDecrypt(aesKey, encrypted.iv, encrypted.ciphertext);
+}
+
 window.E2EE = {
   generateKeyPair,
   loadKeyPair,
@@ -80,5 +152,12 @@ window.E2EE = {
   exportPrivateKey,
   importPrivateKey,
   encryptMessage,
-  decryptMessage
+  decryptMessage,
+  generateAESKey,
+  exportAESKey,
+  importAESKey,
+  aesEncrypt,
+  aesDecrypt,
+  encryptForBoth,
+  decryptForMyself
 };

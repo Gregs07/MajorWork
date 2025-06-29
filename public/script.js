@@ -47,10 +47,9 @@ const fileInput = document.getElementById('fileInput');
 let myUsername = null;
 let currentChat = null;
 let currentChatType = null; // 'contact' or 'group'
-let myKeyPair = null; // <-- E2EE keypair
+let myKeyPair = null; // E2EE keypair
 const EMOJI_LIST = ["😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😍","😘","😗","😚","😙","🥰","😋","😜","🤪","😎","😭","😢","😤","😠","😡","🤬","🤗","😇","😏","😶","😬","🥲","🥹","🥺","😳","🥵","🥶","🥴","😵","🤯","😱","😨","😰","😥","😓","🤔","🤨","😐","😑","🙄","😤","😮‍💨","😮","😲","🥱","😴","🤤","😪","😵‍💫","😷","🤒","🤕","🤢","🤮","🤧","🥳","🥸","😺","😸","😹","😻","😼","😽","🙀","😿","😾","👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","🫶","🫰","👈","👉","👆","🖕","👇","☝️","👍","👎"];
 
-// Initialize the app
 init();
 
 function init() {
@@ -60,18 +59,13 @@ function init() {
 }
 
 function setupEventListeners() {
-  // Auth
   authForm.onsubmit = handleLogin;
   registerBtn.onclick = handleRegister;
   logoutBtn.onclick = handleLogout;
-  
-  // Chat
   sendBtn.addEventListener('click', sendMessage);
   messageInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') sendMessage();
   });
-  
-  // Contacts
   addContactBtn.addEventListener('click', () => showModal(addContactModal));
   createGroupBtn.addEventListener('click', () => {
     prepareGroupModal();
@@ -80,8 +74,6 @@ function setupEventListeners() {
   refreshContactsBtn.addEventListener('click', loadContacts);
   sendRequestBtn.addEventListener('click', sendFriendRequest);
   confirmCreateGroupBtn.addEventListener('click', createGroup);
-  
-  // Modals
   closeSettings.addEventListener('click', () => hideModal(settingsModal));
   closeAccountSettings.addEventListener('click', () => hideModal(accountSettingsModal));
   window.addEventListener('click', (e) => {
@@ -89,19 +81,14 @@ function setupEventListeners() {
       hideModal(e.target);
     }
   });
-  
-  // Emoji
   emojiBtn.addEventListener('click', showEmojiPicker);
   window.addEventListener('click', () => emojiMenu.classList.remove('show'));
-  
-  // Settings
   settingsBtn.addEventListener('click', () => showModal(settingsModal));
   darkModeToggle.addEventListener('change', toggleDarkMode);
   accentColorPicker.addEventListener('change', changeAccentColor);
   resetSettingsBtn.addEventListener('click', resetSettings);
 }
 
-// Show/hide app UI based on login status
 function showAppUI(loggedIn) {
   if (loggedIn) {
     topBar.style.display = '';
@@ -112,7 +99,6 @@ function showAppUI(loggedIn) {
   }
 }
 
-// Username and account info
 function updateUserInfo() {
   if (myUsername) {
     userInfo.innerHTML = `<span style="cursor:pointer;" id="openAccountSettings">${myUsername} &#x25BC;</span>`;
@@ -124,13 +110,11 @@ function updateUserInfo() {
   }
 }
 
-// Authentication Functions
 async function checkAuthStatus() {
   try {
     const response = await fetch('/api/whoami');
     const data = await response.json();
     myUsername = data.username;
-    
     if (myUsername) {
       await setupE2EEKeys(myUsername);
       hideModal(authModal);
@@ -168,24 +152,20 @@ async function handleLogin(e) {
   e.preventDefault();
   const username = authUsername.value.trim();
   const password = authPassword.value;
-  
   if (!username || !password) {
     authError.textContent = 'Please enter both username and password';
     return;
   }
-
   try {
     const response = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Login failed');
     }
-    
     await checkAuthStatus();
   } catch (error) {
     authError.textContent = error.message || 'Login error';
@@ -197,24 +177,20 @@ async function handleRegister(e) {
   e.preventDefault();
   const username = authUsername.value.trim();
   const password = authPassword.value;
-  
   if (!username || !password) {
     authError.textContent = 'Please enter both username and password';
     return;
   }
-
   try {
     const response = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Registration failed');
     }
-    
     await checkAuthStatus();
   } catch (error) {
     authError.textContent = error.message || 'Registration error';
@@ -243,22 +219,15 @@ async function handleLogout() {
   }
 }
 
-// Contact Management
 async function loadContacts() {
   if (!myUsername) return;
-  
   try {
     const response = await fetch('/api/contacts');
     if (!response.ok) throw new Error('Failed to load contacts');
-    
     const data = await response.json();
-    
-    // Clear existing lists
     contactsList.innerHTML = '';
     groupsList.innerHTML = '';
     requestsList.innerHTML = '';
-    
-    // Populate contacts
     data.contacts.forEach(contact => {
       const li = document.createElement('li');
       li.textContent = contact;
@@ -266,8 +235,6 @@ async function loadContacts() {
       li.addEventListener('click', () => openChat(contact, 'contact'));
       contactsList.appendChild(li);
     });
-    
-    // Populate groups
     data.groups.forEach(group => {
       const li = document.createElement('li');
       li.textContent = group.name;
@@ -275,8 +242,6 @@ async function loadContacts() {
       li.addEventListener('click', () => openChat(group.id, 'group'));
       groupsList.appendChild(li);
     });
-    
-    // Populate friend requests
     if (data.requests && data.requests.length > 0) {
       data.requests.forEach(request => {
         const li = document.createElement('li');
@@ -290,15 +255,12 @@ async function loadContacts() {
         `;
         requestsList.appendChild(li);
       });
-      
-      // Add event listeners to request buttons
       document.querySelectorAll('.accept').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           await handleFriendRequest(e.target.dataset.id, true);
           loadContacts();
         });
       });
-      
       document.querySelectorAll('.reject').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           await handleFriendRequest(e.target.dataset.id, false);
@@ -308,7 +270,6 @@ async function loadContacts() {
     } else {
       requestsList.innerHTML = '<li class="no-requests">No pending requests</li>';
     }
-    
   } catch (error) {
     console.error('Failed to load contacts:', error);
   }
@@ -317,24 +278,20 @@ async function loadContacts() {
 async function sendFriendRequest() {
   const username = newContactUsername.value.trim();
   contactError.textContent = '';
-  
   if (!username) {
     contactError.textContent = 'Please enter a username';
     return;
   }
-
   try {
     const response = await fetch('/api/contacts/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username })
     });
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to send request');
     }
-    
     const data = await response.json();
     if (data.success) {
       hideModal(addContactModal);
@@ -354,12 +311,10 @@ async function handleFriendRequest(requestId, accept) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: accept ? 'accept' : 'reject' })
     });
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to process request');
     }
-    
     return await response.json();
   } catch (error) {
     console.error('Failed to handle friend request:', error);
@@ -367,16 +322,12 @@ async function handleFriendRequest(requestId, accept) {
   }
 }
 
-// Group Management
 async function prepareGroupModal() {
   try {
     const response = await fetch('/api/contacts');
     if (!response.ok) throw new Error('Failed to load contacts');
-    
     const data = await response.json();
-    
     groupMembersList.innerHTML = '<h4>Select Members:</h4>';
-    
     if (data.contacts && data.contacts.length > 0) {
       data.contacts.forEach(contact => {
         const div = document.createElement('div');
@@ -390,7 +341,6 @@ async function prepareGroupModal() {
     } else {
       groupMembersList.innerHTML += '<p>No contacts available to add</p>';
     }
-    
   } catch (error) {
     console.error('Failed to prepare group modal:', error);
     groupMembersList.innerHTML = '<p>Error loading contacts</p>';
@@ -401,36 +351,29 @@ async function createGroup() {
   const groupName = newGroupName.value.trim();
   const members = Array.from(document.querySelectorAll('#groupMembersList input:checked'))
     .map(checkbox => checkbox.value);
-  
   if (!groupName) {
     groupError.textContent = 'Please enter a group name';
     return;
   }
-  
   if (members.length < 1) {
     groupError.textContent = 'Please select at least one member';
     return;
   }
-
   try {
     const response = await fetch('/api/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: groupName, members })
     });
-    
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to create group');
     }
-    
     const data = await response.json();
     if (data.success) {
       hideModal(createGroupModal);
       newGroupName.value = '';
       loadContacts();
-      
-      // Open the new group chat
       if (data.groupId) {
         openChat(data.groupId, 'group');
       }
@@ -441,59 +384,51 @@ async function createGroup() {
   }
 }
 
-// Chat Functions
 function openChat(id, type) {
   currentChat = id;
   currentChatType = type;
-
-  // Update UI
   currentChatName.textContent = id;
   messageInput.disabled = false;
   sendBtn.disabled = false;
   if (fileInput) fileInput.disabled = false;
-
-  // Highlight active chat
   const selector = type === 'contact' ? `[data-contact="${id}"]` : `[data-group="${id}"]`;
   document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active-contact'));
   document.querySelector(selector)?.classList.add('active-contact');
-
-  // Load messages
   loadMessages();
 }
 
-// --- E2EE send message ---
+// --- Hybrid E2EE for Contact Messages ---
 async function sendMessage() {
   const message = messageInput.value.trim();
   const file = fileInput && fileInput.files && fileInput.files[0];
   if (!message && !file) return;
-
   try {
     let endpoint, options;
     if (currentChatType === 'contact') {
       endpoint = `/api/conversations/${encodeURIComponent(currentChat)}`;
-      let encryptedMsg = message;
+      let encryptedPayload = null;
       if (message) {
-        // Encrypt with recipient's public key
         const resp = await fetch(`/api/publickey/${encodeURIComponent(currentChat)}`);
         if (!resp.ok) throw new Error('Failed to fetch recipient public key');
-        const {publicKey: recipientPubB64} = await resp.json();
+        const { publicKey: recipientPubB64 } = await resp.json();
         const recipientPub = await window.E2EE.importPublicKey(recipientPubB64);
-        encryptedMsg = await window.E2EE.encryptMessage(recipientPub, message);
+        const myPubB64 = localStorage.getItem('e2ee_publicKey');
+        const myPub = await window.E2EE.importPublicKey(myPubB64);
+        encryptedPayload = await window.E2EE.encryptForBoth(myPub, recipientPub, message);
       }
       if (file) {
         const formData = new FormData();
-        formData.append('message', encryptedMsg);
+        formData.append('message', JSON.stringify(encryptedPayload));
         formData.append('file', file);
         options = { method: 'POST', body: formData };
       } else {
         options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: encryptedMsg })
+          body: JSON.stringify({ message: JSON.stringify(encryptedPayload) })
         };
       }
     } else {
-      // (Groups remain unencrypted here, can be upgraded to E2EE later)
       endpoint = `/api/groups/${encodeURIComponent(currentChat)}/messages`;
       if (file) {
         const formData = new FormData();
@@ -508,7 +443,6 @@ async function sendMessage() {
         };
       }
     }
-
     const response = await fetch(endpoint, options);
     if (!response.ok) {
       const errorData = await response.json();
@@ -523,10 +457,8 @@ async function sendMessage() {
   }
 }
 
-// --- E2EE load messages (DECRYPT ALL) ---
 async function loadMessages() {
   if (!currentChat) return;
-
   try {
     let endpoint;
     if (currentChatType === 'contact') {
@@ -534,31 +466,27 @@ async function loadMessages() {
     } else {
       endpoint = `/api/groups/${encodeURIComponent(currentChat)}/messages`;
     }
-
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error('Failed to load messages');
     const messages = await response.json();
-
     chatWindow.innerHTML = '';
-
     if (messages.length === 0) {
       chatWindow.innerHTML = '<p id="no-messages">No messages yet</p>';
       return;
     }
-
-    // ---- FIX: Decrypt ALL messages for contacts ----
     if (currentChatType === 'contact' && myKeyPair && myKeyPair.privateKey) {
       for (const msg of messages) {
         if (msg.message) {
           try {
-            msg.message = await window.E2EE.decryptMessage(myKeyPair.privateKey, msg.message);
+            const encryptedPayload = JSON.parse(msg.message);
+            const isSender = msg.sender === myUsername;
+            msg.message = await window.E2EE.decryptForMyself(myKeyPair.privateKey, encryptedPayload, isSender);
           } catch (e) {
             msg.message = '[Unable to decrypt]';
           }
         }
       }
     }
-
     messages.forEach((msg, idx) => {
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('message-container');
@@ -566,11 +494,9 @@ async function loadMessages() {
         messageDiv.style.marginLeft = 'auto';
         messageDiv.style.marginRight = '0';
       }
-
       const messageContent = document.createElement('div');
       messageContent.classList.add('message');
       messageContent.classList.add(msg.sender === myUsername ? 'mine' : 'other');
-
       if (msg.sender === myUsername) {
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️';
@@ -578,7 +504,6 @@ async function loadMessages() {
         editBtn.title = 'Edit message';
         editBtn.onclick = () => editMessagePrompt(idx, msg.message);
         messageContent.appendChild(editBtn);
-
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '🗑️';
         deleteBtn.className = 'delete-btn';
@@ -586,19 +511,14 @@ async function loadMessages() {
         deleteBtn.onclick = () => deleteMessage(idx);
         messageContent.appendChild(deleteBtn);
       }
-
       const senderSpan = document.createElement('span');
       senderSpan.className = 'message-sender';
       senderSpan.textContent = msg.sender;
-
       const textSpan = document.createElement('span');
       textSpan.textContent = msg.message;
-
       messageContent.appendChild(senderSpan);
       messageContent.appendChild(document.createElement('br'));
       messageContent.appendChild(textSpan);
-
-      // Show file if present
       if (msg.file) {
         const fileDiv = document.createElement('div');
         fileDiv.className = 'attach';
@@ -618,11 +538,9 @@ async function loadMessages() {
         messageContent.appendChild(document.createElement('br'));
         messageContent.appendChild(fileDiv);
       }
-
       messageDiv.appendChild(messageContent);
       chatWindow.appendChild(messageDiv);
     });
-
     chatWindow.scrollTop = chatWindow.scrollHeight;
   } catch (error) {
     console.error('Failed to load messages:', error);
@@ -630,7 +548,6 @@ async function loadMessages() {
   }
 }
 
-// --- Edit message prompt ---
 function editMessagePrompt(idx, oldMsg) {
   const newMsg = prompt('Edit your message:', oldMsg);
   if (newMsg === null || newMsg.trim() === oldMsg) return;
@@ -652,7 +569,6 @@ async function updateMessage(idx, newMsg) {
   }
 }
 
-// --- Delete message ---
 async function deleteMessage(idx) {
   if (!confirm('Delete this message?')) return;
   try {
@@ -665,7 +581,6 @@ async function deleteMessage(idx) {
   }
 }
 
-// UI Helpers
 function showModal(modal) {
   modal.classList.add('show');
   document.body.style.overflow = 'hidden';
@@ -678,14 +593,13 @@ function hideModal(modal) {
 
 function showEmojiPicker(e) {
   e.stopPropagation();
-  
   emojiMenu.innerHTML = '';
   EMOJI_LIST.forEach(emoji => {
     const emojiSpan = document.createElement('span');
     emojiSpan.textContent = emoji;
     emojiSpan.addEventListener('click', () => {
       const cursorPos = messageInput.selectionStart;
-      messageInput.value = messageInput.value.substring(0, cursorPos) + emoji + 
+      messageInput.value = messageInput.value.substring(0, cursorPos) + emoji +
                           messageInput.value.substring(cursorPos);
       messageInput.focus();
       messageInput.selectionStart = messageInput.selectionEnd = cursorPos + emoji.length;
@@ -693,14 +607,12 @@ function showEmojiPicker(e) {
     });
     emojiMenu.appendChild(emojiSpan);
   });
-  
   const rect = emojiBtn.getBoundingClientRect();
   emojiMenu.style.left = `${rect.left}px`;
   emojiMenu.style.bottom = `${window.innerHeight - rect.top + 10}px`;
   emojiMenu.classList.add('show');
 }
 
-// Settings
 function getSettings() {
   const settings = localStorage.getItem('chatSettings');
   return settings ? JSON.parse(settings) : {};
@@ -712,8 +624,6 @@ function saveSettings(settings) {
 
 function applySettings() {
   const settings = getSettings();
-  
-  // Dark mode
   if (settings.darkMode) {
     document.body.classList.add('dark');
     darkModeToggle.checked = true;
@@ -721,8 +631,6 @@ function applySettings() {
     document.body.classList.remove('dark');
     darkModeToggle.checked = false;
   }
-  
-  // Accent color
   if (settings.accentColor) {
     document.documentElement.style.setProperty('--accent', settings.accentColor);
     accentColorPicker.value = settings.accentColor;
@@ -751,26 +659,19 @@ function resetSettings() {
   applySettings();
 }
 
-// Typing Indicator
 let typingTimeout;
 
 messageInput.addEventListener('input', () => {
   if (!currentChat) return;
-  
   clearTimeout(typingTimeout);
-  
-  // Send typing indicator
   const endpoint = currentChatType === 'contact'
     ? `/api/typing/${encodeURIComponent(currentChat)}`
     : `/api/groups/${encodeURIComponent(currentChat)}/typing`;
-  
   fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ typing: true })
   });
-  
-  // Set timeout to stop typing indicator
   typingTimeout = setTimeout(() => {
     fetch(endpoint, {
       method: 'POST',
@@ -780,18 +681,14 @@ messageInput.addEventListener('input', () => {
   }, 2000);
 });
 
-// Check for other user's typing
 setInterval(async () => {
   if (!currentChat || !myUsername) return;
-  
   try {
     const endpoint = currentChatType === 'contact'
       ? `/api/typing/${encodeURIComponent(currentChat)}`
       : `/api/groups/${encodeURIComponent(currentChat)}/typing`;
-    
     const response = await fetch(endpoint);
     if (!response.ok) return;
-    
     const data = await response.json();
     if (data.typing && data.user !== myUsername) {
       typingIndicator.textContent = `${data.user} is typing...`;
