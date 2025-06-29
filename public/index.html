@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <title>Secure Chat App</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Add Socket.IO client CDN before your scripts -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
   <!-- Auth Modal -->
@@ -26,7 +28,6 @@
       <span id="closeAccountSettings" class="close">&times;</span>
       <h2>Account Details</h2>
       <div><b>Username:</b> <span id="accountUsername"></span></div>
-      <!-- Add extra account settings here if needed -->
     </div>
   </div>
 
