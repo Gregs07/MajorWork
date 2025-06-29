@@ -523,7 +523,7 @@ async function sendMessage() {
   }
 }
 
-// --- E2EE load messages ---
+// --- E2EE load messages (DECRYPT ALL) ---
 async function loadMessages() {
   if (!currentChat) return;
 
@@ -546,11 +546,10 @@ async function loadMessages() {
       return;
     }
 
-    // Decrypt contact messages if E2EE
+    // ---- FIX: Decrypt ALL messages for contacts ----
     if (currentChatType === 'contact' && myKeyPair && myKeyPair.privateKey) {
       for (const msg of messages) {
-        if (msg.message && msg.sender !== myUsername) {
-          // Decrypt received messages
+        if (msg.message) {
           try {
             msg.message = await window.E2EE.decryptMessage(myKeyPair.privateKey, msg.message);
           } catch (e) {
