@@ -48,6 +48,7 @@ let myUsername = null;
 let currentChat = null;
 let currentChatType = null; // 'contact' or 'group'
 let myKeyPair = null; // E2EE keypair
+let socket = null;
 const EMOJI_LIST = ["😀","😁","😂","🤣","😃","😄","😅","😆","😉","😊","😍","😘","😗","😚","😙","🥰","😋","😜","🤪","😎","😭","😢","😤","😠","😡","🤬","🤗","😇","😏","😶","😬","🥲","🥹","🥺","😳","🥵","🥶","🥴","😵","🤯","😱","😨","😰","😥","😓","🤔","🤨","😐","😑","🙄","😤","😮‍💨","😮","😲","🥱","😴","🤤","😪","😵‍💫","😷","🤒","🤕","🤢","🤮","🤧","🥳","🥸","😺","😸","😹","😻","😼","😽","🙀","😿","😾","👋","🤚","🖐️","✋","🖖","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","🫶","🫰","👈","👉","👆","🖕","👇","☝️","👍","👎"];
 
 init();
@@ -117,11 +118,13 @@ async function checkAuthStatus() {
     myUsername = data.username;
     if (myUsername) {
       await setupE2EEKeys(myUsername);
+      setupSocketIO();
       hideModal(authModal);
       showAppUI(true);
       updateUserInfo();
       loadContacts();
     } else {
+      if (socket) { try { socket.disconnect(); } catch {} }
       showModal(authModal);
       showAppUI(false);
       updateUserInfo();
@@ -132,6 +135,33 @@ async function checkAuthStatus() {
     showAppUI(false);
     updateUserInfo();
   }
+}
+
+// --- SOCKET.IO CLIENT INTEGRATION ---
+function setupSocketIO() {
+  if (socket) {
+    try { socket.disconnect(); } catch {}
+    socket = null;
+  }
+  socket = io('http://localhost:3000', { withCredentials: true });
+  socket.emit('join', myUsername);
+
+  // Real-time: when a new message is sent to you, reload messages if relevant chat is open
+  socket.on('new_message', (data) => {
+    if (
+      (data.type === 'contact' && currentChatType === 'contact' &&
+        (data.contact === myUsername || data.contact === currentChat))
+      ||
+      (data.type === 'group' && currentChatType === 'group' && data.groupId === currentChat)
+    ) {
+      loadMessages();
+    }
+  });
+
+  // Real-time: reload contacts/groups on any update
+  socket.on('contacts_updated', () => {
+    loadContacts();
+  });
 }
 
 // --- FIXED: Always POST public key after login/registration ---
@@ -213,6 +243,7 @@ async function handleLogout() {
     messageInput.disabled = true;
     sendBtn.disabled = true;
     if (fileInput) fileInput.value = '';
+    if (socket) { try { socket.disconnect(); } catch {} }
     showModal(authModal);
     showAppUI(false);
     updateUserInfo();

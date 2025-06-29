@@ -6,6 +6,11 @@ const path = require('path');
 const cors = require('cors');
 const multer = require('multer');
 const app = express();
+const http = require('http').createServer(app);
+const { Server } = require('socket.io');
+const io = new Server(http, {
+  cors: { origin: "http://localhost:3000", credentials: true }
+});
 const PORT = 3000;
 
 // Create data directory if it doesn't exist
@@ -220,6 +225,10 @@ app.post('/api/contacts/request', requireAuth, async (req, res) => {
     contactsData[toUser].incomingRequests.push({ from: fromUser, id: requestId });
 
     writeData(CONTACTS_FILE, contactsData);
+
+    // Real-time: notify recipient their contacts changed
+    io.to(toUser).emit('contacts_updated');
+    io.to(fromUser).emit('contacts_updated');
     res.json({ success: true });
   } catch (error) {
     console.error('Friend request error:', error);
@@ -271,6 +280,10 @@ app.post('/api/contacts/request/:requestId', requireAuth, async (req, res) => {
     }
 
     writeData(CONTACTS_FILE, contactsData);
+
+    // Real-time: notify both users their contacts changed
+    io.to(user).emit('contacts_updated');
+    io.to(fromUser).emit('contacts_updated');
     res.json({ success: true });
   } catch (error) {
     console.error('Request processing error:', error);
@@ -311,7 +324,7 @@ app.get('/api/contacts', requireAuth, (req, res) => {
   }
 });
 
-// Send Message (Contact) WITH FILE SUPPORT
+// Send Message (Contact) WITH FILE SUPPORT + Real-time notify
 app.post('/api/conversations/:contact', requireAuth, upload.single('file'), (req, res) => {
   const from = req.session.username;
   const to = req.params.contact;
@@ -323,8 +336,13 @@ app.post('/api/conversations/:contact', requireAuth, upload.single('file'), (req
   const messagesData = readData(MESSAGES_FILE);
   const key = [from, to].sort().join('__');
   messagesData[key] = messagesData[key] || [];
-  messagesData[key].push({ sender: from, message, file: fileUrl });
+  const msgObj = { sender: from, message, file: fileUrl };
+  messagesData[key].push(msgObj);
   writeData(MESSAGES_FILE, messagesData);
+
+  // Real-time: notify both sender and recipient if they're online
+  io.to(from).emit('new_message', { type: 'contact', contact: to, message: msgObj });
+  io.to(to).emit('new_message', { type: 'contact', contact: from, message: msgObj });
 
   res.json({ success: true });
 });
@@ -338,7 +356,7 @@ app.get('/api/conversations/:contact', requireAuth, (req, res) => {
   res.json(messagesData[key] || []);
 });
 
-// Create Group
+// Create Group + Real-time notify all members
 app.post('/api/groups', requireAuth, (req, res) => {
   const { name, members } = req.body;
   const username = req.session.username;
@@ -350,6 +368,9 @@ app.post('/api/groups', requireAuth, (req, res) => {
   const groupMembers = Array.from(new Set([username, ...members]));
   groupsData[id] = { name, members: groupMembers };
   writeData(GROUPS_FILE, groupsData);
+
+  // Real-time: notify all group members their contacts/groups changed
+  groupMembers.forEach(member => io.to(member).emit('contacts_updated'));
   res.json({ success: true, groupId: id });
 });
 
@@ -366,7 +387,7 @@ app.get('/api/groups/:groupId/messages', requireAuth, (req, res) => {
   res.json(messagesData[key] || []);
 });
 
-// Send Group Message WITH FILE SUPPORT
+// Send Group Message WITH FILE SUPPORT + Real-time notify all members
 app.post('/api/groups/:groupId/messages', requireAuth, upload.single('file'), (req, res) => {
   const username = req.session.username;
   const groupId = req.params.groupId;
@@ -380,9 +401,16 @@ app.post('/api/groups/:groupId/messages', requireAuth, upload.single('file'), (r
   }
   const messagesData = readData(MESSAGES_FILE);
   const key = `group__${groupId}`;
+  const msgObj = { sender: username, message, file: fileUrl };
   messagesData[key] = messagesData[key] || [];
-  messagesData[key].push({ sender: username, message, file: fileUrl });
+  messagesData[key].push(msgObj);
   writeData(MESSAGES_FILE, messagesData);
+
+  // Real-time: notify all group members
+  groupsData[groupId].members.forEach(member =>
+    io.to(member).emit('new_message', { type: 'group', groupId, message: msgObj })
+  );
+
   res.json({ success: true });
 });
 
@@ -402,6 +430,21 @@ app.put('/api/messages/:chatType/:chatId/:msgIdx', requireAuth, (req, res) => {
   if (!msg || msg.sender !== username) return res.status(403).json({ error: "Can't edit" });
   msg.message = message;
   writeData(MESSAGES_FILE, messagesData);
+
+  // Real-time: notify participants to reload messages
+  if (chatType === 'contact') {
+    io.to(username).emit('new_message', { type: 'contact', contact: chatId });
+    io.to(chatId).emit('new_message', { type: 'contact', contact: username });
+  } else {
+    // Notify group members
+    const groupsData = readData(GROUPS_FILE);
+    if (groupsData[chatId]) {
+      groupsData[chatId].members.forEach(member =>
+        io.to(member).emit('new_message', { type: 'group', groupId: chatId })
+      );
+    }
+  }
+
   res.json({ success: true });
 });
 
@@ -419,6 +462,21 @@ app.delete('/api/messages/:chatType/:chatId/:msgIdx', requireAuth, (req, res) =>
   if (!msg || msg.sender !== username) return res.status(403).json({ error: "Can't delete" });
   messagesData[key].splice(msgIdx, 1);
   writeData(MESSAGES_FILE, messagesData);
+
+  // Real-time: notify participants to reload messages
+  if (chatType === 'contact') {
+    io.to(username).emit('new_message', { type: 'contact', contact: chatId });
+    io.to(chatId).emit('new_message', { type: 'contact', contact: username });
+  } else {
+    // Notify group members
+    const groupsData = readData(GROUPS_FILE);
+    if (groupsData[chatId]) {
+      groupsData[chatId].members.forEach(member =>
+        io.to(member).emit('new_message', { type: 'group', groupId: chatId })
+      );
+    }
+  }
+
   res.json({ success: true });
 });
 
@@ -473,7 +531,14 @@ app.get('/api/groups/:groupId/typing', requireAuth, (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
+// --- SOCKET.IO REAL-TIME CONNECTIONS ---
+io.on('connection', (socket) => {
+  // User joins their username room after login/auth
+  socket.on('join', (username) => {
+    socket.join(username);
+  });
+});
+
+http.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
