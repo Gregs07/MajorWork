@@ -1,19 +1,15 @@
-// --- server.js with PostgreSQL and connect-pg-simple session store ---
+// --- server.js with PostgreSQL (Neon) and connect-pg-simple session store ---
 
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
-const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const app = express();
+const pool = require('./db'); // <-- Use db.js for database connection
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+const app = express();
 
 // Session middleware (PostgreSQL-backed)
 app.use(session({
@@ -21,11 +17,11 @@ app.use(session({
     pool: pool,
     tableName: 'session'
   }),
-  secret: 'your-secret-key', // replace with your own!
+  secret: 'your-secret-key', // Replace with a strong secret in production!
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // set to true if using HTTPS
+    secure: false, // Set to true if using HTTPS (production)
     maxAge: 24 * 60 * 60 * 1000 // 1 day
   }
 }));
@@ -44,13 +40,6 @@ function requireAuth(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
   next();
 }
-
-// --- USERS TABLE: id SERIAL, username TEXT UNIQUE, password TEXT, publickey TEXT
-// --- CONTACTS TABLE: id SERIAL, user1 TEXT, user2 TEXT
-// --- GROUPS TABLE: id SERIAL, name TEXT, owner TEXT
-// --- GROUP_MEMBERS TABLE: group_id INT, username TEXT
-// --- MESSAGES TABLE: id SERIAL, chat_type TEXT, chat_id TEXT, sender TEXT, message TEXT, file TEXT, created_at TIMESTAMP
-// --- FRIEND_REQUESTS TABLE: id SERIAL, from_user TEXT, to_user TEXT
 
 // --- Auth routes ---
 
@@ -186,6 +175,7 @@ app.post('/api/groups', requireAuth, async (req, res) => {
 
 // --- Messaging ---
 
+// 1-on-1 conversations
 app.get('/api/conversations/:contact', requireAuth, async (req, res) => {
   const user = req.session.user;
   const contact = req.params.contact;
@@ -216,6 +206,7 @@ app.post('/api/conversations/:contact', requireAuth, upload.single('file'), asyn
   res.json({ success: true });
 });
 
+// Group conversations
 app.get('/api/groups/:groupid/messages', requireAuth, async (req, res) => {
   const groupId = req.params.groupid;
   const rows = await pool.query(
