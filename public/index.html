@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Secure Chat App</title>
+  <title>Encrypt-MSG</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -28,6 +28,17 @@
       <h2>Account Details</h2>
       <div><b>Username:</b> <span id="accountUsername"></span></div>
       <!-- Add extra account settings here if needed -->
+
+      <!-- Change Password Section -->
+      <div id="changePasswordSection" style="margin-top:24px;">
+        <h3>Change Password</h3>
+        <form id="changePasswordForm">
+          <input type="password" id="currentPassword" placeholder="Current password" required>
+          <input type="password" id="newPassword" placeholder="New password" required>
+          <button type="submit">Change Password</button>
+        </form>
+        <div id="changePasswordResult"></div>
+      </div>
     </div>
   </div>
 
@@ -126,5 +137,43 @@
 
   <script src="e2ee.js"></script>
   <script src="script.js"></script>
+  <script>
+    // ---- Change Password Logic ----
+    document.addEventListener("DOMContentLoaded", function() {
+      const changePasswordForm = document.getElementById('changePasswordForm');
+      const changePasswordResult = document.getElementById('changePasswordResult');
+      if (changePasswordForm) {
+        changePasswordForm.addEventListener('submit', async function(e) {
+          e.preventDefault();
+          changePasswordResult.textContent = '';
+          const currentPassword = document.getElementById('currentPassword').value;
+          const newPassword = document.getElementById('newPassword').value;
+          if (!currentPassword || !newPassword) {
+            changePasswordResult.textContent = "Please fill in all fields.";
+            return;
+          }
+          try {
+            const res = await fetch('/api/change-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ currentPassword, newPassword }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              changePasswordResult.style.color = "green";
+              changePasswordResult.textContent = data.message || "Password changed successfully!";
+              changePasswordForm.reset();
+            } else {
+              changePasswordResult.style.color = "red";
+              changePasswordResult.textContent = data.error || "Something went wrong.";
+            }
+          } catch (err) {
+            changePasswordResult.style.color = "red";
+            changePasswordResult.textContent = "Network error.";
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>

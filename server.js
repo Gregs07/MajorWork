@@ -79,6 +79,34 @@ app.get('/api/whoami', (req, res) => {
   res.json({ username: req.session.user || null });
 });
 
+// --- Change Password Route ---
+app.post('/api/change-password', requireAuth, async (req, res) => {
+  const username = req.session.user;
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  try {
+    // Get user from DB
+    const result = await pool.query('SELECT password FROM users WHERE username=$1', [username]);
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Verify current password
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) return res.status(400).json({ error: 'Current password is incorrect' });
+
+    // Hash new password
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    // Update password in DB
+    await pool.query('UPDATE users SET password=$1 WHERE username=$2', [hash, username]);
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // --- Public Key Storage ---
 app.post('/api/publickey', requireAuth, async (req, res) => {
   const { username, publicKey } = req.body;
