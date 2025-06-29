@@ -37,5 +37,8 @@
   },
   "skib123": {
     "password": "$2b$10$auqLwuvAV1Tnh2O1bXZ2nOsHRdzN.IDq6uqFFiYj3bypQ84H76HIO"
+  },
+  "test100": {
+    "password": "$2b$10$p2oT1OvQGYUg.cJ31.AjJ.IisENx4oogt1FN7IhfqXGhkVwesfPd6"
   }
 }
