@@ -134,18 +134,20 @@ async function checkAuthStatus() {
   }
 }
 
+// --- FIXED: Always POST public key after login/registration ---
 async function setupE2EEKeys(username) {
   let keys = await window.E2EE.loadKeyPair();
   if (!keys) {
     keys = await window.E2EE.generateKeyPair();
-    const pub = await window.E2EE.exportPublicKey(keys.publicKey);
-    await fetch('/api/publickey', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username, publicKey: pub})
-    });
   }
   myKeyPair = keys;
+  // Always export and upload the public key after login
+  const pub = await window.E2EE.exportPublicKey(keys.publicKey);
+  await fetch('/api/publickey', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ username, publicKey: pub })
+  });
 }
 
 async function handleLogin(e) {
