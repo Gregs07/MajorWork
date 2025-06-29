@@ -112,7 +112,7 @@ function updateUserInfo() {
 
 async function checkAuthStatus() {
   try {
-    const response = await fetch('/api/whoami');
+    const response = await fetch('/api/whoami', { credentials: 'include' });
     const data = await response.json();
     myUsername = data.username;
     if (myUsername) {
@@ -134,19 +134,18 @@ async function checkAuthStatus() {
   }
 }
 
-// --- FIXED: Always POST public key after login/registration ---
 async function setupE2EEKeys(username) {
   let keys = await window.E2EE.loadKeyPair();
   if (!keys) {
     keys = await window.E2EE.generateKeyPair();
   }
   myKeyPair = keys;
-  // Always export and upload the public key after login
   const pub = await window.E2EE.exportPublicKey(keys.publicKey);
   await fetch('/api/publickey', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ username, publicKey: pub })
+    body: JSON.stringify({ username, publicKey: pub }),
+    credentials: 'include'
   });
 }
 
@@ -162,7 +161,8 @@ async function handleLogin(e) {
     const response = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password }),
+      credentials: 'include'
     });
     if (!response.ok) {
       const errorData = await response.json();
@@ -187,7 +187,8 @@ async function handleRegister(e) {
     const response = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password }),
+      credentials: 'include'
     });
     if (!response.ok) {
       const errorData = await response.json();
@@ -202,7 +203,7 @@ async function handleRegister(e) {
 
 async function handleLogout() {
   try {
-    await fetch('/api/logout', { method: 'POST' });
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
     myUsername = null;
     currentChat = null;
     contactsList.innerHTML = '';
@@ -224,7 +225,7 @@ async function handleLogout() {
 async function loadContacts() {
   if (!myUsername) return;
   try {
-    const response = await fetch('/api/contacts');
+    const response = await fetch('/api/contacts', { credentials: 'include' });
     if (!response.ok) throw new Error('Failed to load contacts');
     const data = await response.json();
     contactsList.innerHTML = '';
@@ -288,7 +289,8 @@ async function sendFriendRequest() {
     const response = await fetch('/api/contacts/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username })
+      body: JSON.stringify({ username }),
+      credentials: 'include'
     });
     if (!response.ok) {
       const errorData = await response.json();
@@ -311,7 +313,8 @@ async function handleFriendRequest(requestId, accept) {
     const response = await fetch(`/api/contacts/request/${requestId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: accept ? 'accept' : 'reject' })
+      body: JSON.stringify({ action: accept ? 'accept' : 'reject' }),
+      credentials: 'include'
     });
     if (!response.ok) {
       const errorData = await response.json();
@@ -326,7 +329,7 @@ async function handleFriendRequest(requestId, accept) {
 
 async function prepareGroupModal() {
   try {
-    const response = await fetch('/api/contacts');
+    const response = await fetch('/api/contacts', { credentials: 'include' });
     if (!response.ok) throw new Error('Failed to load contacts');
     const data = await response.json();
     groupMembersList.innerHTML = '<h4>Select Members:</h4>';
@@ -365,7 +368,8 @@ async function createGroup() {
     const response = await fetch('/api/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: groupName, members })
+      body: JSON.stringify({ name: groupName, members }),
+      credentials: 'include'
     });
     if (!response.ok) {
       const errorData = await response.json();
@@ -399,7 +403,6 @@ function openChat(id, type) {
   loadMessages();
 }
 
-// --- Hybrid E2EE for Contact Messages ---
 async function sendMessage() {
   const message = messageInput.value.trim();
   const file = fileInput && fileInput.files && fileInput.files[0];
@@ -410,7 +413,7 @@ async function sendMessage() {
       endpoint = `/api/conversations/${encodeURIComponent(currentChat)}`;
       let encryptedPayload = null;
       if (message) {
-        const resp = await fetch(`/api/publickey/${encodeURIComponent(currentChat)}`);
+        const resp = await fetch(`/api/publickey/${encodeURIComponent(currentChat)}`, { credentials: 'include' });
         if (!resp.ok) throw new Error('Failed to fetch recipient public key');
         const { publicKey: recipientPubB64 } = await resp.json();
         const recipientPub = await window.E2EE.importPublicKey(recipientPubB64);
@@ -422,12 +425,13 @@ async function sendMessage() {
         const formData = new FormData();
         formData.append('message', JSON.stringify(encryptedPayload));
         formData.append('file', file);
-        options = { method: 'POST', body: formData };
+        options = { method: 'POST', body: formData, credentials: 'include' };
       } else {
         options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: JSON.stringify(encryptedPayload) })
+          body: JSON.stringify({ message: JSON.stringify(encryptedPayload) }),
+          credentials: 'include'
         };
       }
     } else {
@@ -436,12 +440,13 @@ async function sendMessage() {
         const formData = new FormData();
         formData.append('message', message);
         formData.append('file', file);
-        options = { method: 'POST', body: formData };
+        options = { method: 'POST', body: formData, credentials: 'include' };
       } else {
         options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message })
+          body: JSON.stringify({ message }),
+          credentials: 'include'
         };
       }
     }
@@ -468,7 +473,7 @@ async function loadMessages() {
     } else {
       endpoint = `/api/groups/${encodeURIComponent(currentChat)}/messages`;
     }
-    const response = await fetch(endpoint);
+    const response = await fetch(endpoint, { credentials: 'include' });
     if (!response.ok) throw new Error('Failed to load messages');
     const messages = await response.json();
     chatWindow.innerHTML = '';
@@ -558,11 +563,16 @@ function editMessagePrompt(idx, oldMsg) {
 
 async function updateMessage(idx, newMsg) {
   try {
-    const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(currentChat)}/${idx}`;
+    let chatId = currentChat;
+    if (currentChatType === 'contact') {
+      chatId = [myUsername, currentChat].sort().join('__');
+    }
+    const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(chatId)}/${idx}`;
     const response = await fetch(endpoint, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: newMsg })
+      body: JSON.stringify({ message: newMsg }),
+      credentials: 'include'
     });
     if (!response.ok) throw new Error('Edit failed');
     loadMessages();
@@ -574,8 +584,12 @@ async function updateMessage(idx, newMsg) {
 async function deleteMessage(idx) {
   if (!confirm('Delete this message?')) return;
   try {
-    const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(currentChat)}/${idx}`;
-    const response = await fetch(endpoint, { method: 'DELETE' });
+    let chatId = currentChat;
+    if (currentChatType === 'contact') {
+      chatId = [myUsername, currentChat].sort().join('__');
+    }
+    const endpoint = `/api/messages/${currentChatType}/${encodeURIComponent(chatId)}/${idx}`;
+    const response = await fetch(endpoint, { method: 'DELETE', credentials: 'include' });
     if (!response.ok) throw new Error('Delete failed');
     loadMessages();
   } catch (e) {
@@ -672,13 +686,15 @@ messageInput.addEventListener('input', () => {
   fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ typing: true })
+    body: JSON.stringify({ typing: true }),
+    credentials: 'include'
   });
   typingTimeout = setTimeout(() => {
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ typing: false })
+      body: JSON.stringify({ typing: false }),
+      credentials: 'include'
     });
   }, 2000);
 });
@@ -689,7 +705,7 @@ setInterval(async () => {
     const endpoint = currentChatType === 'contact'
       ? `/api/typing/${encodeURIComponent(currentChat)}`
       : `/api/groups/${encodeURIComponent(currentChat)}/typing`;
-    const response = await fetch(endpoint);
+    const response = await fetch(endpoint, { credentials: 'include' });
     if (!response.ok) return;
     const data = await response.json();
     if (data.typing && data.user !== myUsername) {
